@@ -1,0 +1,56 @@
+Design document
+
+---------------------------------------------------------------
+
+Enemy artillery routine is described below. enemy_brain.sqf
+
+Setup:
+Opfor will be given a starting location to shell, like a city. Use gamelogic to mark the centre point.
+For this use BIS_fnc_findSafePos https://community.bistudio.com/wiki/BIS_fnc_findSafePos
+Take pos = gamelogic.
+
+consider using a hashmap to store variables.
+-----------
+
+Step 1:
+
+Use getArtilleryETA to a) check if target can be hit, and if so, b) the time to target. Store the ETA.
+Enemy artillery shells position using doArtilleryFire. Initially it will fire all rounds, maybe later it could be a random number or small batches of 8 etc.
+If it fires a random number, it should get a new safePos to fire. (not sure what to do here when firing in counterbattery mode)
+
+Note: Might be worth spinning this off into its own script, and starting with step 3. Logically it should start firing from the first fire mission WP.
+That way the target position can just be passed to the script, along with if the fire should be in batches or all at once.
+
+Keep firing until out of ammo.
+-----------
+
+Step 2: spawn the counterbattery radar script (i.e. create markers) from the artillery firing script.
+
+Sleep for ETA/2 seconds, then draw a marker on the grid of the artillery piece. For now, just handle one artillery unit.
+Marker name should be of format "marker_enemy_" + str(unitName). If handling multiple arty, each should get its own marker.
+You will likely need to compare current grid and previous grid to avoid unnecessary moving markers. (Don't create marker in the loop, just move it).
+
+This was the counterbattery radar mechanic. This should also trigger an alarm in the town + show a hint of which grid the fire comes from. 
+Might be worth reporting target grid in the hint as well, e.g. "Incoming! Splash: <grid> From: <grid>! <ETA/2 seconds>!"
+
+This should run once per volley, so if it's in batches it should be called multiple times.
+-----------
+
+Step 3: Waypoints and movement. Should probably be the main loop of the script.
+
+After completing the fire mission (all ammo must be fired), the SPAAG/MRLS should move to a rearm point, and then to the next firing position.
+We will need a list of waypoints (gamelogics). Probably best to name them a certain way and use wsfunctions to collect them into a list.
+
+IRL it takes 10 mins to reload these things, but in Arma there are two options.
+First, use ammo containers or trucks that can reload the arty. That will probably take less than a minute but you can let it sleep there for a bit longer (or query mag state)
+Alternatively, use addMagazineTurret to add some rounds every X seconds so that one complete reload takes X minutes. 
+Maybe set this to a script attached to an object that can be destroyed. Ammo truck is probably better/easier.
+
+Finally, move to the next firing position. Sleep for a few minutes to simulate plotting and then check what to shoot at. This will probably need some iteration to get right.
+There should be an event handler tied to friendly artillery that reveals its grid square and sets it to a global variable upon firing.
+Querry the variable to see if there's a grid position to shoot at, otherwise keep shooting at the town. 
+Not sure how it should decide that the last position isn't relevant anymore, and that it should switch back to the town. Maybe store the time as well?
+So e.g. playerArtyGridTime = serverTime could be set from the EH, and now the enemy_brain could compare with current serverTime. If it's more than 5 mins old, then disregard?
+
+Keep iterating through fire mission WPs and rearm WPs. If players don't have a drone, probably cycle in order. 
+If they do have UAVs or some other scout, then you could make life harder for them by going to random locations.
