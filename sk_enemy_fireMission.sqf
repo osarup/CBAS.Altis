@@ -7,6 +7,7 @@ Documentation here
 */
 params ["_artyUnit", "_targetPos", ["_magazine",""], ["_fireFullVolley", true], ["_burstSize", 8], ["_targetSafeZone",0], ["_targetRadius", 400]];
 
+_firePos = 0;
 _tempEHindex = 0;
 
 //create a hashmap of the magazines and ammo that the vehicle has
@@ -24,7 +25,7 @@ if (_magRounds == 0) exitWith {systemChat "DEBUG: Vehicle has no ammo"};
 _splashETA = _artyUnit getArtilleryETA [_targetPos, _magazine];
 if (_splashETA < 1) exitWith {systemChat "DEBUG: Cannot fire, check distance from target"};
 
-//by fire everything in one go unless specified, i.e. for loop runs once.
+//fire everything in one go unless specified, i.e. for loop runs once.
 //also guard against potential divide-by-zero
 if (_fireFullVolley || _burstSize <= 0) then {_burstSize = _magRounds};
 
@@ -37,9 +38,14 @@ for "_i" from 1 to ceil (_magRounds/_burstSize) do {
 
 	systemChat format ["DEBUG: Fire mission: Burst %1 of %2, firing %3 rounds", _i, ceil(_magRounds/_burstSize), _burstSize];
 
-	//get fire position if safezone defined. min 50m otherwise it's mostly useless anyway.
+	//get fire position if safezone defined. min 50m otherwise it's mostly useless anyway, so just use an inverted normal distribution
+	//credits for these code snippets to dedmen https://sqf.ovh/sqf%20math/2018/05/05/generate-a-random-position.html
+	//TODO: Consider using https://community.bistudio.com/wiki/BIS_fnc_randomPos instead
+	//or: https://community.bistudio.com/wiki/BIS_fnc_getArea
 	if (_targetSafeZone >= 50) then {
-		_targetPos = [_targetPos, _targetSafeZone, _targetRadius, 0,0,0,0,[], _targetPos] call BIS_fnc_findSafePos;
+		_firePos = _targetPos getPos [sqrt (_targetSafeZone^2 + random (_targetRadius^2 - _targetSafeZone^2)), random 360];
+	} else {
+		_firePos = _targetPos getPos [_targetRadius * sqrt (1 - abs random [-1, 0, 1]), random 360];
 	};
 
 	//make sure that artillery is actually alive before starting fire mission.
@@ -52,10 +58,10 @@ for "_i" from 1 to ceil (_magRounds/_burstSize) do {
 			_this execVM "sk_EH_CBRadar.sqf";
 		}];
 	
-	_artyUnit setVariable ["CBR_targetPos", _targetPos]; //for EH access
+	_artyUnit setVariable ["CBR_targetPos", _firePos]; //for EH access
 
 	//fire at position with defined burst size
-	_artyUnit doArtilleryFire [_targetPos, _magazine, _burstSize];
+	_artyUnit doArtilleryFire [_firePos, _magazine, _burstSize];
 
 };
 
